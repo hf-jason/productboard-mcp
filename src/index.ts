@@ -20,6 +20,8 @@ async function main(): Promise<void> {
     // Validate configuration
     const validation = configManager.validate();
     if (!validation.valid) {
+      const msg = `Configuration validation failed: ${validation.errors.join(', ')}`;
+      process.stderr.write(`[productboard-mcp] FATAL: ${msg}\n`);
       logger.fatal('Configuration validation failed', { errors: validation.errors });
       process.exit(1);
     }
@@ -48,6 +50,8 @@ async function main(): Promise<void> {
     
     logger.info('Server is running. Press Ctrl+C to stop.');
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    process.stderr.write(`[productboard-mcp] FATAL: Server startup failed: ${msg}\n`);
     logger.fatal('Server startup failed', error);
     process.exit(1);
   }

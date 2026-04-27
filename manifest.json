@@ -37,6 +37,7 @@
     { "name": "pb_product_create", "description": "Create a product" },
     { "name": "pb_product_hierarchy", "description": "Get full product hierarchy" },
     { "name": "pb_note_list", "description": "List customer notes" },
+    { "name": "pb_note_get", "description": "Get a note by ID" },
     { "name": "pb_note_create", "description": "Create a customer note" },
     { "name": "pb_objective_list", "description": "List objectives" },
     { "name": "pb_objective_create", "description": "Create an objective" },

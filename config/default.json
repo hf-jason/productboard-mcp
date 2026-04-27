@@ -40,6 +40,6 @@
     "enabled": true,
     "templatesPath": "./prompts"
   },
-  "logLevel": "info",
-  "logPretty": true
+  "logLevel": "error",
+  "logPretty": false
 }

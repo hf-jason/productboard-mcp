@@ -24,7 +24,7 @@ const aliasToDir = {
 function getRelativePath(fromFile, toDir) {
   const fromDir = dirname(fromFile);
   const toPath = join(distDir, toDir);
-  const relativePath = relative(fromDir, toPath);
+  const relativePath = relative(fromDir, toPath).replace(/\\/g, '/');
   return relativePath.startsWith('.') ? relativePath : `./${relativePath}`;
 }
 
