@@ -57,9 +57,43 @@ export class GetNoteTool extends BaseTool<GetNoteParams> {
       ? fields.tags.map((t: any) => t.name || t).filter(Boolean)
       : [];
 
-    const relationships: any[] = Array.isArray(note.relationships) ? note.relationships : [];
+    const relationships: any[] = Array.isArray(note.relationships?.data) ? note.relationships.data : [];
     const customers = relationships.filter((r: any) => r.type === 'customer');
     const linkedFeatures = relationships.filter((r: any) => r.type === 'link' && r.target?.type === 'feature');
+
+    const resolveEntity = async (id: string): Promise<{ name: string; email: string }> => {
+      try {
+        const entity = await this.apiClient.get(`/entities/${id}`);
+        const f = (entity as any).data?.fields || {};
+        return { name: f.name || '', email: f.email || '' };
+      } catch {
+        return { name: '', email: '' };
+      }
+    };
+
+    const formatUser = (base: any, resolved: { name: string; email: string }) => {
+      const email = base?.email || resolved.email || '';
+      const name = resolved.name || '';
+      const id = base?.id || '';
+      return [name, email, id ? `(${id})` : ''].filter(Boolean).join(' ') || 'Unknown';
+    };
+
+    // Resolve owner, creator, and customer names in parallel
+    const [ownerResolved, creatorResolved, ...resolvedCustomers] = await Promise.all([
+      fields.owner?.id ? resolveEntity(fields.owner.id) : Promise.resolve({ name: '', email: '' }),
+      fields.creator?.id ? resolveEntity(fields.creator.id) : Promise.resolve({ name: '', email: '' }),
+      ...customers.map(async (r: any) => {
+        const id: string = r.target?.id;
+        const type: string = r.target?.type || 'company';
+        try {
+          const entity = await this.apiClient.get(`/entities/${id}`);
+          const name = (entity as any).data?.fields?.name || (entity as any).data?.fields?.email || id;
+          return `${name} (${type}/${id})`;
+        } catch {
+          return `${type}/${id}`;
+        }
+      }),
+    ]);
 
     const lines = [
       `ID: ${note.id}`,
@@ -67,24 +101,23 @@ export class GetNoteTool extends BaseTool<GetNoteParams> {
       `Title: ${title}`,
       `Content: ${content}`,
       ``,
-      `Owner: ${fields.owner?.email || 'Unknown'} ${fields.owner?.id ? `(${fields.owner.id})` : ''}`.trim(),
-      `Creator: ${fields.creator?.email || 'Unknown'} ${fields.creator?.id ? `(${fields.creator.id})` : ''}`.trim(),
+      `Owner: ${fields.owner?.id ? formatUser(fields.owner, ownerResolved as { name: string; email: string }) : 'Unknown'}`,
+      `Creator: ${fields.creator?.id ? formatUser(fields.creator, creatorResolved as { name: string; email: string }) : 'Unknown'}`,
       ``,
       `Processed: ${fields.processed ?? 'Unknown'}`,
       `Archived: ${fields.archived ?? 'Unknown'}`,
       ``,
       `Tags: ${tags.length > 0 ? tags.join(', ') : 'None'}`,
       ``,
-      `Linked customers: ${customers.length > 0
-        ? customers.map((r: any) => `${r.target.type}/${r.target.id}`).join(', ')
-        : 'None'}`,
+      `Linked customers: ${resolvedCustomers.length > 0 ? resolvedCustomers.join(', ') : 'None'}`,
       `Linked features: ${linkedFeatures.length > 0
         ? linkedFeatures.map((r: any) => r.target.id).join(', ')
         : 'None'}`,
       ``,
       `Created: ${note.createdAt || 'Unknown'}`,
       `Updated: ${note.updatedAt || 'Unknown'}`,
-      `URL: ${note.links?.self || ''}`,
+      `API URL: ${note.links?.self || ''}`,
+      `Productboard URL: ${note.links?.html || ''}`,
     ];
 
     return {

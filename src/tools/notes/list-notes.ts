@@ -129,15 +129,63 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
       .replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&lt;/g, '<')
       .replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim();
 
+    // Collect unique entity IDs (users + customers) for a single batch resolution
+    const entityIds = new Set<string>();
+    for (const note of notes) {
+      const fields = note.fields || {};
+      if (fields.owner?.id) entityIds.add(fields.owner.id);
+      if (fields.creator?.id) entityIds.add(fields.creator.id);
+      const rels: any[] = Array.isArray(note.relationships?.data) ? note.relationships.data : [];
+      for (const r of rels) {
+        if (r.type === 'customer' && r.target?.id) entityIds.add(r.target.id);
+      }
+    }
+
+    const entityCache = new Map<string, { name: string; email: string }>();
+    await Promise.all(
+      Array.from(entityIds).map(async (id) => {
+        try {
+          const entity = await this.apiClient.get(`/entities/${id}`);
+          const f = (entity as any).data?.fields || {};
+          entityCache.set(id, { name: f.name || '', email: f.email || '' });
+        } catch {
+          entityCache.set(id, { name: '', email: '' });
+        }
+      })
+    );
+
+    const formatUser = (base: any) => {
+      const resolved = base?.id ? (entityCache.get(base.id) || { name: '', email: '' }) : { name: '', email: '' };
+      const name = resolved.name || '';
+      const email = base?.email || resolved.email || '';
+      const id = base?.id || '';
+      return [name, email, id ? `(${id})` : ''].filter(Boolean).join(' ') || 'Unknown';
+    };
+
     // Format response for MCP protocol
-    const formattedNotes = notes.map((note: any) => ({
-      id: note.id,
-      title: note.fields?.name || (note.fields?.content ? stripHtml(note.fields.content).substring(0, 60) : 'Untitled Note'),
-      content: note.fields?.content ? stripHtml(note.fields.content) : '',
-      owner: note.fields?.owner?.email || 'Unknown',
-      createdAt: note.createdAt,
-      tags: note.fields?.tags || [],
-    }));
+    const formattedNotes = notes.map((note: any) => {
+      const fields = note.fields || {};
+      const content = fields.content ? stripHtml(fields.content) : '';
+      const title = fields.name || (content ? content.substring(0, 60) : 'Untitled Note');
+      const tags: string[] = Array.isArray(fields.tags)
+        ? fields.tags.map((t: any) => t.name || t).filter(Boolean)
+        : [];
+      const relationships: any[] = Array.isArray(note.relationships?.data) ? note.relationships.data : [];
+      const customers = relationships
+        .filter((r: any) => r.type === 'customer')
+        .map((r: any) => {
+          const id: string = r.target?.id;
+          const type: string = r.target?.type || 'company';
+          const resolved = entityCache.get(id);
+          const label = resolved?.name || resolved?.email || id;
+          return `${label} (${type}/${id})`;
+        });
+      const features = relationships
+        .filter((r: any) => r.type === 'link' && r.target?.type === 'feature')
+        .map((r: any) => r.target?.id);
+
+      return { id: note.id, title, content, fields, tags, customers, features, createdAt: note.createdAt };
+    });
 
     // Create a text summary of the notes
     const summary = formattedNotes.length > 0
@@ -145,9 +193,14 @@ export class ListNotesTool extends BaseTool<ListNotesParams> {
         formattedNotes.map((n, i) =>
           `${i + 1}. ${n.title}\n` +
           `   ID: ${n.id}\n` +
-          `   Owner: ${n.owner}\n` +
-          `   Content: ${n.content}\n` +
-          `   Tags: ${n.tags.length > 0 ? n.tags.join(', ') : 'None'}\n`
+          `   Created: ${n.createdAt || 'Unknown'}\n` +
+          `   Owner: ${formatUser(n.fields?.owner)}\n` +
+          `   Creator: ${formatUser(n.fields?.creator)}\n` +
+          `   Processed: ${n.fields?.processed ?? 'Unknown'} | Archived: ${n.fields?.archived ?? 'Unknown'}\n` +
+          `   Tags: ${n.tags.length > 0 ? n.tags.join(', ') : 'None'}\n` +
+          `   Customers: ${n.customers.length > 0 ? n.customers.join(', ') : 'None'}\n` +
+          `   Linked features: ${n.features.length > 0 ? n.features.join(', ') : 'None'}\n` +
+          `   Content: ${n.content}\n`
         ).join('\n')
       : 'No notes found.';
     
