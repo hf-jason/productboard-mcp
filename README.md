@@ -1,5 +1,8 @@
 # productboard-mcp
 
+> [!NOTE]
+> This is a fork of [Enreign/productboard-mcp](https://github.com/Enreign/productboard-mcp) with additional features and improvements.
+
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server for the [Productboard](https://www.productboard.com) API. Enables AI assistants (Claude, Cursor, etc.) to interact with your Productboard workspace.
 
 ## Tools
@@ -15,6 +18,7 @@ An [MCP (Model Context Protocol)](https://modelcontextprotocol.io) server for th
 | `pb_product_create` | Create a product |
 | `pb_product_hierarchy` | Get full product hierarchy |
 | `pb_note_list` | List customer notes |
+| `pb_note_get` | Get a single note by ID |
 | `pb_note_create` | Create a customer note |
 | `pb_objective_list` | List objectives |
 | `pb_objective_create` | Create an objective |
